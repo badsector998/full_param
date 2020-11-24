@@ -35,6 +35,51 @@ SoftwareSerial gpsSerial(RXPin, TXPin);
 //  mpuInterrupt = true;
 //}
 
+bool done = true;
+float yawOffset, pitchOffset, rollOffset;
+void calibrateImu() {
+  readAngles();
+  for (int i = 0; i < 1000; i++) {
+    yawOffset += angles[0];
+    pitchOffset += angles[1];
+    rollOffset += angles[2];
+  }
+  yawOffset = yawOffset / 1000;
+  pitchOffset = pitchOffset / 1000;
+  rollOffset = rollOffset / 1000;
+  Serial.print("Yaw Offset : ");
+  Serial.println(yawOffset);
+  Serial.print("Pitch Offset : ");
+  Serial.println(pitchOffset);
+  Serial.print("Roll Offset : ");
+  Serial.println(rollOffset);
+  delay(5000);
+  done = false;
+}
+
+void readAngles() {
+  //mpuInterrupt = false;
+  mpuIntStatus = mpu.getIntStatus();
+  fifoCount = mpu.getFIFOCount();
+  if ((mpuIntStatus & 0x10) || fifoCount == 1024) {
+    mpu.resetFIFO();
+  } else if (mpuIntStatus & 0x02) {
+    while (fifoCount < packetSize) fifoCount = mpu.getFIFOCount();
+
+    mpu.getFIFOBytes(fifoBuffer, packetSize);
+    fifoCount -= packetSize;
+
+    mpu.dmpGetQuaternion(&q, fifoBuffer);
+    mpu.dmpGetEuler(euler, &q);
+    //Serial.print("Euler\t");
+    angles[0] = euler[0] * 180 / M_PI;
+    angles[1] = euler[1] * 180 / M_PI;
+    angles[2] = euler[2] * 180 / M_PI;
+  }
+
+  mpu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
+}
+
 void setup() {
   // put your setup code here, to run once:
   Wire.begin();
@@ -43,9 +88,9 @@ void setup() {
   Serial.begin(115200);
   gpsSerial.begin(GPSBaud);
 
-//  Serial.println(F("Initializing Device..."));
-//  mpu.initialize();
-//  pinMode(INTERRUPT_PIN, INPUT);
+  //  Serial.println(F("Initializing Device..."));
+  //  mpu.initialize();
+  //  pinMode(INTERRUPT_PIN, INPUT);
 
   Serial.println(F("Testing Device Connection..."));
   if (mpu.testConnection()) {
@@ -76,9 +121,9 @@ void setup() {
     Serial.println(F("Enabling DMP..."));
     mpu.setDMPEnabled(true);
 
-//    Serial.println(F("Enabling interrupt detection.."));
-//    attachInterrupt(digitalPinToInterrupt(INTERRUPT_PIN), dmpDataReady, RISING);
-//    mpuIntStatus = mpu.getIntStatus();
+    //    Serial.println(F("Enabling interrupt detection.."));
+    //    attachInterrupt(digitalPinToInterrupt(INTERRUPT_PIN), dmpDataReady, RISING);
+    //    mpuIntStatus = mpu.getIntStatus();
 
     Serial.println(F("DMP Ready! Waiting for first interrupt"));
     dmpReady = true;
@@ -94,48 +139,33 @@ void setup() {
 void loop() {
   // put your main code here, to run repeatedly:
   if (!dmpReady) return;
-  
-  while (gpsSerial.available()>0) {
+
+  while (gpsSerial.available() > 0) {
     if (gps.encode(gpsSerial.read())) {
       if (gps.location.isValid()) {
         lastKnownLoc[0] = gps.location.lat();
         lastKnownLoc[1] = gps.location.lng();
         lastKnownLoc[2] = gps.altitude.meters();
         speedKmph = gps.speed.kmph();
-      }else{
+      } else {
         Serial.println("Location invalid!");
       }
     }
   }
 
-  //mpuInterrupt = false;
-  mpuIntStatus = mpu.getIntStatus();
-  fifoCount = mpu.getFIFOCount();
-  if ((mpuIntStatus & 0x10) || fifoCount == 1024) {
-    mpu.resetFIFO();
-  } else if (mpuIntStatus & 0x02) {
-    while (fifoCount < packetSize) fifoCount = mpu.getFIFOCount();
-
-    mpu.getFIFOBytes(fifoBuffer, packetSize);
-    fifoCount -= packetSize;
-
-    mpu.dmpGetQuaternion(&q, fifoBuffer);
-    mpu.dmpGetEuler(euler, &q);
-    //Serial.print("Euler\t");
-    angles[0] = euler[0] * 180 / M_PI;
-    angles[1] = euler[1] * 180 / M_PI;
-    angles[2] = euler[2] * 180 / M_PI;
+  if (!done) {
+    calibrateImu();
+  } else {
+    readAngles();
   }
-
-  mpu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
 
   Serial.print(lastKnownLoc[0], 6); Serial.print(" ");
   Serial.print(lastKnownLoc[1], 6); Serial.print(" ");
   Serial.print(lastKnownLoc[2]); Serial.print(" ");
   Serial.print(speedKmph); Serial.print(" ");
-  Serial.print(angles[0]); Serial.print(" ");
-  Serial.print(angles[1]); Serial.print(" ");
-  Serial.print(angles[2]); Serial.print(" ");
+  Serial.print(angles[0] - yawOffset); Serial.print(" ");
+  Serial.print(angles[1] - pitchOffset); Serial.print(" ");
+  Serial.print(angles[2] - rollOffset); Serial.print(" ");
   Serial.print(ax); Serial.print(" ");
   Serial.print(ay); Serial.print(" ");
   Serial.print(az); Serial.print(" ");
