@@ -108,14 +108,15 @@ void setup() {
   Serial.println(F("Initializing DMP..."));
   devStatus = mpu.dmpInitialize();
 
-  //-2326  295 1752  -67 17  -79
-
-  mpu.setXGyroOffset(-67);
-  mpu.setYGyroOffset(17);
-  mpu.setZGyroOffset(-79);
-  mpu.setZAccelOffset(1752);
-  mpu.setXAccelOffset(-2326);
-  mpu.setYAccelOffset(295);
+  //-2326  295 1752  -67 17  -79 (UNO)
+  //1946  -699  2039  93  -28 -8 (NANO)
+  
+  mpu.setXGyroOffset(93);
+  mpu.setYGyroOffset(-28);
+  mpu.setZGyroOffset(-8);
+  mpu.setZAccelOffset(2039);
+  mpu.setXAccelOffset(1946);
+  mpu.setYAccelOffset(-699);
 
   if (devStatus == 0) {
     Serial.println(F("Enabling DMP..."));
